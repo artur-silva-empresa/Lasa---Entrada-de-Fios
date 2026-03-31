@@ -47,6 +47,9 @@ type AppContextType = {
   saveToFile: () => Promise<void>;
   downloadBackup: () => void;
   closeDatabase: () => void;
+  memorizeFile: () => Promise<{ success: boolean; message: string }>;
+  fileHandle: any;
+  storedHandle: any;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -166,6 +169,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Release the file handle and clear state
     setFileHandle(null);
     setState({ requests: [], items: [], deliveries: [] });
+  };
+
+  const memorizeFile = async () => {
+    try {
+      const [handle] = await (window as any).showOpenFilePicker({
+        types: [{
+          description: 'Ficheiro de Base de Dados JSON',
+          accept: { 'application/json': ['.json'] },
+        }],
+      });
+      
+      try {
+        await set('lasa_db_handle', handle);
+        setStoredHandle(handle);
+        return { success: true, message: `Ficheiro "${handle.name}" memorizado com sucesso! Será sugerido ao abrir a aplicação.` };
+      } catch (idbError) {
+        return { success: false, message: 'O seu browser está a bloquear a memorização de ficheiros (IndexedDB desativado para ficheiros locais). Terá de abrir o ficheiro manualmente sempre que iniciar a aplicação.' };
+      }
+    } catch (e) {
+      return { success: false, message: 'Operação cancelada.' };
+    }
   };
 
   const handleOpenStoredFile = async () => {
@@ -317,23 +341,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             Para começar, por favor selecione a base de dados (ficheiro .json) ou crie uma nova.
           </p>
           <div className="flex flex-col gap-4">
-            {storedHandle && (
+            {storedHandle ? (
               <button 
                 onClick={handleOpenStoredFile}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer mb-4"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer mb-2 shadow-sm"
               >
-                Abrir Base de Dados Recente
+                Abrir Base de Dados Recente ({storedHandle.name})
               </button>
+            ) : (
+              <p className="text-xs text-amber-600 mb-2 bg-amber-50 p-2 rounded border border-amber-200">
+                Nenhuma base de dados memorizada. Se já tem um ficheiro, use a opção abaixo para o abrir.
+              </p>
             )}
             <button 
               onClick={handleOpenFile}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer shadow-sm"
             >
-              Abrir Outra Base de Dados
+              Abrir Ficheiro Existente (.json)
             </button>
             <button 
               onClick={handleNewFile}
-              className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer border border-slate-300 mt-2"
             >
               Criar Nova Base de Dados
             </button>
@@ -344,7 +372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase, memorizeFile, fileHandle, storedHandle }}>
       {children}
     </AppContext.Provider>
   );
