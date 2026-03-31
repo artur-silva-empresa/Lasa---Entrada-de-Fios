@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, AlertTriangle, Settings, Save } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, AlertTriangle, Settings, Save, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppStore } from '../store';
 
@@ -9,7 +9,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
-  const { saveToFile } = useAppStore();
+  const { saveToFile, downloadBackup } = useAppStore();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos de Fio', icon: FileSpreadsheet },
@@ -28,7 +28,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           Gestão de Fios
         </h1>
       </div>
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
@@ -56,6 +56,13 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         >
           <Save className="w-5 h-5 text-emerald-500" />
           Guardar Alterações
+        </button>
+        <button
+          onClick={downloadBackup}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+        >
+          <Download className="w-5 h-5 text-blue-500" />
+          Transferir Backup
         </button>
         <button
           onClick={() => onNavigate('settings')}

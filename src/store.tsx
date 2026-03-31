@@ -45,6 +45,7 @@ type AppContextType = {
   handleOpenFile: () => Promise<void>;
   handleNewFile: () => Promise<void>;
   saveToFile: () => Promise<void>;
+  downloadBackup: () => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -59,12 +60,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isFirstRender = React.useRef(true);
 
   useEffect(() => {
-    get('lasa_db_handle').then(handle => {
-      if (handle) {
-        setStoredHandle(handle);
-      }
-    });
+    try {
+      get('lasa_db_handle').then(handle => {
+        if (handle) {
+          setStoredHandle(handle);
+        }
+      }).catch(e => console.warn('IndexedDB bloqueado pelo browser', e));
+    } catch (e) {
+      console.warn('IndexedDB bloqueado pelo browser', e);
+    }
   }, []);
+
+  const verifyAndRequestPermission = async (handle: any) => {
+    const options = { mode: 'readwrite' };
+    if ((await handle.queryPermission(options)) === 'granted') {
+      return true;
+    }
+    if ((await handle.requestPermission(options)) === 'granted') {
+      return true;
+    }
+    return false;
+  };
 
   // When state changes, save to file
   useEffect(() => {
@@ -76,9 +92,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (fileHandle) {
       const autoSave = async () => {
         try {
-          const writable = await fileHandle.createWritable();
-          await writable.write(JSON.stringify(state, null, 2));
-          await writable.close();
+          const hasPermission = await fileHandle.queryPermission({ mode: 'readwrite' });
+          if (hasPermission === 'granted') {
+            const writable = await fileHandle.createWritable();
+            await writable.write(JSON.stringify(state, null, 2));
+            await writable.close();
+          }
         } catch (e) {
           console.error('Failed to auto-save to file', e);
         }
@@ -88,28 +107,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [state, fileHandle]);
 
   const saveToFile = async () => {
-    if (!fileHandle) return;
+    if (!fileHandle) {
+      alert('Nenhum ficheiro aberto. Use a opção de transferir backup.');
+      return;
+    }
     try {
+      const hasPermission = await verifyAndRequestPermission(fileHandle);
+      if (!hasPermission) {
+        alert('Permissão de escrita negada pelo browser.');
+        return;
+      }
       const writable = await fileHandle.createWritable();
       await writable.write(JSON.stringify(state, null, 2));
       await writable.close();
-      alert('Alterações guardadas com sucesso!');
-    } catch (e) {
+      alert('Alterações guardadas com sucesso no ficheiro!');
+    } catch (e: any) {
       console.error('Failed to save to file', e);
-      alert('Erro ao guardar. Verifique se tem permissões ou se o ficheiro não está aberto noutro programa.');
+      alert(`Erro ao guardar: ${e.message || 'Verifique se o ficheiro não está aberto noutro programa.'}`);
+    }
+  };
+
+  const downloadBackup = () => {
+    try {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'lasa_backup.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Erro ao transferir backup', e);
+      alert('Erro ao transferir o ficheiro de backup.');
     }
   };
 
   const handleOpenStoredFile = async () => {
     if (!storedHandle) return;
     try {
-      const options = { mode: 'readwrite' };
-      if ((await storedHandle.queryPermission(options)) !== 'granted') {
-        const permission = await storedHandle.requestPermission(options);
-        if (permission !== 'granted') {
-          alert('Permissão negada. Por favor, selecione o ficheiro manualmente.');
-          return;
-        }
+      const hasPermission = await verifyAndRequestPermission(storedHandle);
+      if (!hasPermission) {
+        alert('Permissão negada. Por favor, selecione o ficheiro manualmente.');
+        return;
       }
       const file = await storedHandle.getFile();
       const contents = await file.text();
@@ -121,7 +162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('Erro ao abrir ficheiro guardado', e);
       alert('Erro ao abrir a base de dados recente. O ficheiro pode ter sido movido ou apagado.');
       setStoredHandle(null);
-      await set('lasa_db_handle', null);
+      try { await set('lasa_db_handle', null); } catch(err) {}
     }
   };
 
@@ -133,13 +174,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           accept: { 'application/json': ['.json'] },
         }],
       });
+
+      // Request write permission immediately so auto-save works
+      const hasPermission = await verifyAndRequestPermission(handle);
+      if (!hasPermission) {
+        alert('Aviso: Como não deu permissão de escrita, as alterações não serão guardadas automaticamente no ficheiro. Terá de usar o botão "Transferir Backup".');
+      }
+
       const file = await handle.getFile();
       const contents = await file.text();
       const parsed = JSON.parse(contents);
       
       setState(parsed);
       setFileHandle(handle);
-      await set('lasa_db_handle', handle);
+      
+      try {
+        await set('lasa_db_handle', handle);
+      } catch (idbError) {
+        console.warn('IndexedDB bloqueado, não será possível memorizar o ficheiro', idbError);
+      }
     } catch (e) {
       console.error('Erro ao abrir ficheiro', e);
     }
@@ -162,7 +215,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       setState(initialState);
       setFileHandle(handle);
-      await set('lasa_db_handle', handle);
+      
+      try {
+        await set('lasa_db_handle', handle);
+      } catch (idbError) {
+        console.warn('IndexedDB bloqueado', idbError);
+      }
     } catch (e) {
       console.error('Erro ao criar ficheiro', e);
     }
@@ -262,7 +320,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup }}>
       {children}
     </AppContext.Provider>
   );
