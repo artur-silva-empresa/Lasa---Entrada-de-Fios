@@ -39,6 +39,7 @@ type AppContextType = {
   state: AppState;
   addRequest: (request: Omit<Request, 'id' | 'uploadDate'>, items: Omit<RequestItem, 'id' | 'requestId'>[]) => void;
   addDelivery: (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => void;
+  updateRequestItem: (itemId: string, updates: Partial<Omit<RequestItem, 'id' | 'requestId'>>) => void;
   deleteRequest: (id: string) => void;
   clearAll: () => void;
   importData: (data: AppState) => void;
@@ -77,14 +78,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const verifyAndRequestPermission = async (handle: any) => {
-    const options = { mode: 'readwrite' };
-    if ((await handle.queryPermission(options)) === 'granted') {
-      return true;
+    try {
+      const options = { mode: 'readwrite' };
+      if ((await handle.queryPermission(options)) === 'granted') {
+        return true;
+      }
+      if ((await handle.requestPermission(options)) === 'granted') {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.warn('Erro ao verificar permissões', e);
+      return false;
     }
-    if ((await handle.requestPermission(options)) === 'granted') {
-      return true;
-    }
-    return false;
   };
 
   // When state changes, save to file with Debounce to prevent file locking
@@ -144,20 +150,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const downloadBackup = () => {
+  const downloadBackup = async () => {
     try {
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lasa_backup.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Erro ao transferir backup', e);
-      alert('Erro ao transferir o ficheiro de backup.');
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: 'LasaBD.json',
+        types: [{
+          description: 'Ficheiro de Base de Dados JSON',
+          accept: { 'application/json': ['.json'] },
+        }],
+      });
+      
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(state, null, 2));
+      await writable.close();
+      
+      alert('Backup transferido com sucesso!');
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Erro ao transferir backup', e);
+        alert('Erro ao transferir o ficheiro de backup.');
+      }
     }
   };
 
@@ -197,18 +209,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const hasPermission = await verifyAndRequestPermission(storedHandle);
       if (!hasPermission) {
-        alert('Permissão negada. Por favor, selecione o ficheiro manualmente.');
-        return;
+        alert('Aviso: Sem permissão de escrita. A gravação automática poderá não funcionar. Tente usar "Abrir Ficheiro Existente".');
       }
       const file = await storedHandle.getFile();
       const contents = await file.text();
-      const parsed = JSON.parse(contents);
       
-      setState(parsed);
+      let parsed = { requests: [], items: [], deliveries: [] };
+      if (contents.trim()) {
+        parsed = JSON.parse(contents);
+      }
+      
+      setState({
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        items: Array.isArray(parsed.items) ? parsed.items : [],
+        deliveries: Array.isArray(parsed.deliveries) ? parsed.deliveries : []
+      });
       setFileHandle(storedHandle);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro ao abrir ficheiro guardado', e);
-      alert('Erro ao abrir a base de dados recente. O ficheiro pode ter sido movido ou apagado.');
+      alert('Erro ao abrir a base de dados recente. O ficheiro pode ter sido movido, apagado, ou o browser bloqueou o acesso. Por favor, abra o ficheiro manualmente.');
       setStoredHandle(null);
       try { await set('lasa_db_handle', null); } catch(err) {}
     }
@@ -231,18 +250,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const file = await handle.getFile();
       const contents = await file.text();
-      const parsed = JSON.parse(contents);
       
-      setState(parsed);
+      let parsed = { requests: [], items: [], deliveries: [] };
+      if (contents.trim()) {
+        try {
+          parsed = JSON.parse(contents);
+        } catch (err) {
+          alert('O ficheiro selecionado não é um JSON válido.');
+          return;
+        }
+      }
+      
+      setState({
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        items: Array.isArray(parsed.items) ? parsed.items : [],
+        deliveries: Array.isArray(parsed.deliveries) ? parsed.deliveries : []
+      });
       setFileHandle(handle);
+      setStoredHandle(handle);
       
       try {
         await set('lasa_db_handle', handle);
       } catch (idbError) {
         console.warn('IndexedDB bloqueado, não será possível memorizar o ficheiro', idbError);
       }
-    } catch (e) {
-      console.error('Erro ao abrir ficheiro', e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Erro ao abrir ficheiro', e);
+        alert('Erro ao abrir ficheiro: ' + e.message);
+      }
     }
   };
 
@@ -263,14 +299,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       setState(initialState);
       setFileHandle(handle);
+      setStoredHandle(handle);
       
       try {
         await set('lasa_db_handle', handle);
       } catch (idbError) {
         console.warn('IndexedDB bloqueado', idbError);
       }
-    } catch (e) {
-      console.error('Erro ao criar ficheiro', e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Erro ao criar ficheiro', e);
+        alert('Erro ao criar ficheiro: ' + e.message);
+      }
     }
   };
 
@@ -312,6 +352,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const updateRequestItem = (itemId: string, updates: Partial<Omit<RequestItem, 'id' | 'requestId'>>) => {
+    setState(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.id === itemId ? { ...item, ...updates } : item
+      )
+    }));
+  };
+
   const deleteRequest = async (id: string) => {
     setState(prev => ({
       ...prev,
@@ -341,18 +390,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             Para começar, por favor selecione a base de dados (ficheiro .json) ou crie uma nova.
           </p>
           <div className="flex flex-col gap-4">
-            {storedHandle ? (
-              <button 
-                onClick={handleOpenStoredFile}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer mb-2 shadow-sm"
-              >
-                Abrir Base de Dados Recente ({storedHandle.name})
-              </button>
-            ) : (
-              <p className="text-xs text-amber-600 mb-2 bg-amber-50 p-2 rounded border border-amber-200">
-                Nenhuma base de dados memorizada. Se já tem um ficheiro, use a opção abaixo para o abrir.
-              </p>
-            )}
             <button 
               onClick={handleOpenFile}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer shadow-sm"
@@ -372,7 +409,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase, memorizeFile, fileHandle, storedHandle }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, updateRequestItem, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase, memorizeFile, fileHandle, storedHandle }}>
       {children}
     </AppContext.Provider>
   );

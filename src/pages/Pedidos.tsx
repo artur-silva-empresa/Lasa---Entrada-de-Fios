@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store';
 import { parseExcel, exportToExcel } from '../lib/excel';
-import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus, Download } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus, Download, Edit2 } from 'lucide-react';
 
 export function Pedidos() {
-  const { state, addRequest, deleteRequest, addDelivery } = useAppStore();
+  const { state, addRequest, deleteRequest, addDelivery, updateRequestItem } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
@@ -18,6 +18,13 @@ export function Pedidos() {
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryNote, setDeliveryNote] = useState('');
   const [deliveryObservations, setDeliveryObservations] = useState('');
+
+  const [selectedItemForEdit, setSelectedItemForEdit] = useState<any>(null);
+  const [editSection, setEditSection] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [editUnit, setEditUnit] = useState('');
+  const [editObservations, setEditObservations] = useState('');
 
   const handleExport = () => {
     exportToExcel(state.requests, state.items, state.deliveries);
@@ -292,17 +299,34 @@ export function Pedidos() {
                                     <td className="px-4 py-3 font-medium text-emerald-600">{delivered.toLocaleString('pt-PT')}</td>
                                     <td className="px-4 py-3 text-slate-500 italic">{item.observations || '-'}</td>
                                     <td className="px-4 py-3 text-right">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedItemForDelivery(item);
-                                          setDeliveryQuantity(Math.max(0, Number(item.quantity) - delivered).toString());
-                                        }}
-                                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                        title="Registar Entrega"
-                                      >
-                                        <PackagePlus className="w-5 h-5" />
-                                      </button>
+                                      <div className="flex items-center justify-end gap-1">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedItemForEdit(item);
+                                            setEditSection(item.section);
+                                            setEditDescription(item.description);
+                                            setEditQuantity(item.quantity.toString());
+                                            setEditUnit(item.unit || 'Kg');
+                                            setEditObservations(item.observations || '');
+                                          }}
+                                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                          title="Editar Linha"
+                                        >
+                                          <Edit2 className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedItemForDelivery(item);
+                                            setDeliveryQuantity(Math.max(0, Number(item.quantity) - delivered).toString());
+                                          }}
+                                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                          title="Registar Entrega"
+                                        >
+                                          <PackagePlus className="w-5 h-5" />
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                   {isItemExpanded && hasDeliveries && (
@@ -467,6 +491,95 @@ export function Pedidos() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Registar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedItemForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Editar Pedido</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Secção</label>
+                <input
+                  type="text"
+                  value={editSection}
+                  onChange={(e) => setEditSection(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantidade</label>
+                  <input
+                    type="number"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    min="0"
+                  />
+                </div>
+                <div className="w-1/3">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Unidade</label>
+                  <input
+                    type="text"
+                    value={editUnit}
+                    onChange={(e) => setEditUnit(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Observações</label>
+                <textarea
+                  value={editObservations}
+                  onChange={(e) => setEditObservations(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setSelectedItemForEdit(null)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-medium rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedItemForEdit && editQuantity && editDescription && editSection) {
+                    updateRequestItem(selectedItemForEdit.id, {
+                      section: editSection,
+                      description: editDescription,
+                      quantity: Number(editQuantity),
+                      unit: editUnit,
+                      observations: editObservations
+                    });
+                    setSelectedItemForEdit(null);
+                  }
+                }}
+                disabled={!editQuantity || !editDescription || !editSection}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar
               </button>
             </div>
           </div>

@@ -51,13 +51,6 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       </nav>
       <div className="p-4 border-t border-slate-200 space-y-1">
         <button
-          onClick={saveToFile}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-        >
-          <Save className="w-5 h-5 text-emerald-500" />
-          Guardar Alterações
-        </button>
-        <button
           onClick={downloadBackup}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-blue-600 hover:bg-blue-50 hover:text-blue-700"
         >
