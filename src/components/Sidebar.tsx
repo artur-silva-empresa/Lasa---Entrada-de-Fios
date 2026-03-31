@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, AlertTriangle, Settings, Save, Download } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, AlertTriangle, Settings, Save, Download, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppStore } from '../store';
 
@@ -9,7 +9,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
-  const { saveToFile, downloadBackup } = useAppStore();
+  const { saveToFile, downloadBackup, closeDatabase } = useAppStore();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos de Fio', icon: FileSpreadsheet },
@@ -75,6 +75,13 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         >
           <Settings className={cn("w-5 h-5", currentPage === 'settings' ? "text-red-600" : "text-slate-400")} />
           Configurações
+        </button>
+        <button
+          onClick={closeDatabase}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50 hover:text-red-700 mt-2"
+        >
+          <LogOut className="w-5 h-5 text-red-500" />
+          Fechar Base de Dados
         </button>
       </div>
     </div>

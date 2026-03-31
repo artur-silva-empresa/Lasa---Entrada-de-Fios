@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { get, set } from 'idb-keyval';
 
 export type RequestItem = {
@@ -46,6 +46,7 @@ type AppContextType = {
   handleNewFile: () => Promise<void>;
   saveToFile: () => Promise<void>;
   downloadBackup: () => void;
+  closeDatabase: () => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -57,7 +58,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [storedHandle, setStoredHandle] = useState<any>(null);
 
-  const isFirstRender = React.useRef(true);
+  const isFirstRender = useRef(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     try {
@@ -82,7 +84,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   };
 
-  // When state changes, save to file
+  // When state changes, save to file with Debounce to prevent file locking
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -90,20 +92,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     
     if (fileHandle) {
-      const autoSave = async () => {
+      // Clear previous timeout if state changes rapidly
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      // Set a new timeout to save after 1.5 seconds of inactivity
+      saveTimeoutRef.current = setTimeout(async () => {
         try {
           const hasPermission = await fileHandle.queryPermission({ mode: 'readwrite' });
           if (hasPermission === 'granted') {
             const writable = await fileHandle.createWritable();
             await writable.write(JSON.stringify(state, null, 2));
             await writable.close();
+            console.log('Auto-save concluído com sucesso.');
           }
         } catch (e) {
           console.error('Failed to auto-save to file', e);
         }
-      };
-      autoSave();
+      }, 1500);
     }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [state, fileHandle]);
 
   const saveToFile = async () => {
@@ -142,6 +156,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('Erro ao transferir backup', e);
       alert('Erro ao transferir o ficheiro de backup.');
     }
+  };
+
+  const closeDatabase = () => {
+    // Force any pending saves to clear
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    // Release the file handle and clear state
+    setFileHandle(null);
+    setState({ requests: [], items: [], deliveries: [] });
   };
 
   const handleOpenStoredFile = async () => {
@@ -320,7 +344,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase }}>
       {children}
     </AppContext.Provider>
   );
