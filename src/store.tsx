@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { get, set } from 'idb-keyval';
 
 export type RequestItem = {
   id: string;
@@ -43,6 +44,7 @@ type AppContextType = {
   importData: (data: AppState) => void;
   handleOpenFile: () => Promise<void>;
   handleNewFile: () => Promise<void>;
+  saveToFile: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -52,7 +54,17 @@ const STORAGE_KEY = 'fios_app_data';
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>({ requests: [], items: [], deliveries: [] });
   const [fileHandle, setFileHandle] = useState<any>(null);
+  const [storedHandle, setStoredHandle] = useState<any>(null);
+
   const isFirstRender = React.useRef(true);
+
+  useEffect(() => {
+    get('lasa_db_handle').then(handle => {
+      if (handle) {
+        setStoredHandle(handle);
+      }
+    });
+  }, []);
 
   // When state changes, save to file
   useEffect(() => {
@@ -62,18 +74,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     
     if (fileHandle) {
-      const saveToFile = async () => {
+      const autoSave = async () => {
         try {
           const writable = await fileHandle.createWritable();
           await writable.write(JSON.stringify(state, null, 2));
           await writable.close();
         } catch (e) {
-          console.error('Failed to save to file', e);
+          console.error('Failed to auto-save to file', e);
         }
       };
-      saveToFile();
+      autoSave();
     }
   }, [state, fileHandle]);
+
+  const saveToFile = async () => {
+    if (!fileHandle) return;
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(state, null, 2));
+      await writable.close();
+      alert('Alterações guardadas com sucesso!');
+    } catch (e) {
+      console.error('Failed to save to file', e);
+      alert('Erro ao guardar. Verifique se tem permissões ou se o ficheiro não está aberto noutro programa.');
+    }
+  };
+
+  const handleOpenStoredFile = async () => {
+    if (!storedHandle) return;
+    try {
+      const options = { mode: 'readwrite' };
+      if ((await storedHandle.queryPermission(options)) !== 'granted') {
+        const permission = await storedHandle.requestPermission(options);
+        if (permission !== 'granted') {
+          alert('Permissão negada. Por favor, selecione o ficheiro manualmente.');
+          return;
+        }
+      }
+      const file = await storedHandle.getFile();
+      const contents = await file.text();
+      const parsed = JSON.parse(contents);
+      
+      setState(parsed);
+      setFileHandle(storedHandle);
+    } catch (e) {
+      console.error('Erro ao abrir ficheiro guardado', e);
+      alert('Erro ao abrir a base de dados recente. O ficheiro pode ter sido movido ou apagado.');
+      setStoredHandle(null);
+      await set('lasa_db_handle', null);
+    }
+  };
 
   const handleOpenFile = async () => {
     try {
@@ -89,6 +139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       setState(parsed);
       setFileHandle(handle);
+      await set('lasa_db_handle', handle);
     } catch (e) {
       console.error('Erro ao abrir ficheiro', e);
     }
@@ -111,6 +162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       setState(initialState);
       setFileHandle(handle);
+      await set('lasa_db_handle', handle);
     } catch (e) {
       console.error('Erro ao criar ficheiro', e);
     }
@@ -183,11 +235,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             Para começar, por favor selecione a base de dados (ficheiro .json) ou crie uma nova.
           </p>
           <div className="flex flex-col gap-4">
+            {storedHandle && (
+              <button 
+                onClick={handleOpenStoredFile}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer mb-4"
+              >
+                Abrir Base de Dados Recente
+              </button>
+            )}
             <button 
               onClick={handleOpenFile}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer"
             >
-              Abrir Base de Dados Existente
+              Abrir Outra Base de Dados
             </button>
             <button 
               onClick={handleNewFile}
@@ -202,7 +262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile }}>
       {children}
     </AppContext.Provider>
   );
