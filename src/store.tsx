@@ -40,14 +40,18 @@ type AppContextType = {
   addRequest: (request: Omit<Request, 'id' | 'uploadDate'>, items: Omit<RequestItem, 'id' | 'requestId'>[]) => void;
   addDelivery: (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => void;
   updateDelivery: (id: string, updates: Partial<Delivery>) => void;
+  updateRequestItem: (itemId: string, updates: Partial<Omit<RequestItem, 'id' | 'requestId'>>) => void;
   deleteRequest: (id: string) => void;
   clearAll: () => void;
   importData: (data: AppState) => void;
   handleOpenFile: () => Promise<void>;
+  handleNewFile: () => Promise<void>;
   saveToFile: () => Promise<void>;
   downloadBackup: () => void;
   closeDatabase: () => void;
+  memorizeFile: () => Promise<{ success: boolean; message: string }>;
   fileHandle: any;
+  storedHandle: any;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -57,9 +61,22 @@ const STORAGE_KEY = 'fios_app_data';
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>({ requests: [], items: [], deliveries: [] });
   const [fileHandle, setFileHandle] = useState<any>(null);
+  const [storedHandle, setStoredHandle] = useState<any>(null);
 
   const isFirstRender = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    try {
+      get('lasa_db_handle').then(handle => {
+        if (handle) {
+          setStoredHandle(handle);
+        }
+      }).catch(e => console.warn('IndexedDB bloqueado pelo browser', e));
+    } catch (e) {
+      console.warn('IndexedDB bloqueado pelo browser', e);
+    }
+  }, []);
 
   const verifyAndRequestPermission = async (handle: any) => {
     try {
@@ -143,10 +160,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           accept: { 'application/json': ['.json'] },
         }],
       });
+      
       const writable = await handle.createWritable();
       await writable.write(JSON.stringify(state, null, 2));
       await writable.close();
-      alert('Backup guardado com sucesso!');
+      
+      alert('Backup transferido com sucesso!');
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         console.error('Erro ao transferir backup', e);
@@ -163,7 +182,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Release the file handle and clear state
     setFileHandle(null);
     setState({ requests: [], items: [], deliveries: [] });
-    window.close();
+    
+    // Attempt to close the browser tab
+    try {
+      window.open('', '_self', '');
+      window.close();
+    } catch (e) {
+      console.error('Não foi possível fechar a aba automaticamente', e);
+    }
+  };
+
+  const memorizeFile = async () => {
+    try {
+      const [handle] = await (window as any).showOpenFilePicker({
+        types: [{
+          description: 'Ficheiro de Base de Dados JSON',
+          accept: { 'application/json': ['.json'] },
+        }],
+      });
+      
+      try {
+        await set('lasa_db_handle', handle);
+        setStoredHandle(handle);
+        return { success: true, message: `Ficheiro "${handle.name}" memorizado com sucesso! Será sugerido ao abrir a aplicação.` };
+      } catch (idbError) {
+        return { success: false, message: 'O seu browser está a bloquear a memorização de ficheiros (IndexedDB desativado para ficheiros locais). Terá de abrir o ficheiro manualmente sempre que iniciar a aplicação.' };
+      }
+    } catch (e) {
+      return { success: false, message: 'Operação cancelada.' };
+    }
+  };
+
+  const handleOpenStoredFile = async () => {
+    if (!storedHandle) return;
+    try {
+      const hasPermission = await verifyAndRequestPermission(storedHandle);
+      if (!hasPermission) {
+        alert('Aviso: Sem permissão de escrita. A gravação automática poderá não funcionar. Tente usar "Abrir Ficheiro Existente".');
+      }
+      const file = await storedHandle.getFile();
+      const contents = await file.text();
+      
+      let parsed = { requests: [], items: [], deliveries: [] };
+      if (contents.trim()) {
+        parsed = JSON.parse(contents);
+      }
+      
+      setState({
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        items: Array.isArray(parsed.items) ? parsed.items : [],
+        deliveries: Array.isArray(parsed.deliveries) ? parsed.deliveries : []
+      });
+      setFileHandle(storedHandle);
+    } catch (e: any) {
+      console.error('Erro ao abrir ficheiro guardado', e);
+      alert('Erro ao abrir a base de dados recente. O ficheiro pode ter sido movido, apagado, ou o browser bloqueou o acesso. Por favor, abra o ficheiro manualmente.');
+      setStoredHandle(null);
+      try { await set('lasa_db_handle', null); } catch(err) {}
+    }
   };
 
   const handleOpenFile = async () => {
@@ -200,6 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deliveries: Array.isArray(parsed.deliveries) ? parsed.deliveries : []
       });
       setFileHandle(handle);
+      setStoredHandle(handle);
       
       try {
         await set('lasa_db_handle', handle);
@@ -210,6 +287,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (e.name !== 'AbortError') {
         console.error('Erro ao abrir ficheiro', e);
         alert('Erro ao abrir ficheiro: ' + e.message);
+      }
+    }
+  };
+
+  const handleNewFile = async () => {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: 'base_de_dados_lasa.json',
+        types: [{
+          description: 'Ficheiro de Base de Dados JSON',
+          accept: { 'application/json': ['.json'] },
+        }],
+      });
+      
+      const initialState = { requests: [], items: [], deliveries: [] };
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(initialState, null, 2));
+      await writable.close();
+      
+      setState(initialState);
+      setFileHandle(handle);
+      setStoredHandle(handle);
+      
+      try {
+        await set('lasa_db_handle', handle);
+      } catch (idbError) {
+        console.warn('IndexedDB bloqueado', idbError);
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Erro ao criar ficheiro', e);
+        alert('Erro ao criar ficheiro: ' + e.message);
       }
     }
   };
@@ -255,7 +364,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateDelivery = (id: string, updates: Partial<Delivery>) => {
     setState(prev => ({
       ...prev,
-      deliveries: prev.deliveries.map(d => d.id === id ? { ...d, ...updates } : d),
+      deliveries: prev.deliveries.map(d => 
+        d.id === id ? { ...d, ...updates } : d
+      )
+    }));
+  };
+
+  const updateRequestItem = (itemId: string, updates: Partial<Omit<RequestItem, 'id' | 'requestId'>>) => {
+    setState(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.id === itemId ? { ...item, ...updates } : item
+      )
     }));
   };
 
@@ -285,7 +405,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
           <h1 className="text-2xl font-bold mb-6 text-slate-900">LASA - Gestão de Fios</h1>
           <p className="text-slate-600 mb-8">
-            Para começar, por favor selecione a base de dados (ficheiro .json).
+            Para começar, por favor selecione a base de dados (ficheiro .json) ou crie uma nova.
           </p>
           <div className="flex flex-col gap-4">
             <button 
@@ -294,6 +414,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             >
               Abrir Ficheiro Existente (.json)
             </button>
+            <button 
+              onClick={handleNewFile}
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer border border-slate-300 mt-2"
+            >
+              Criar Nova Base de Dados
+            </button>
           </div>
         </div>
       </div>
@@ -301,7 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, updateDelivery, deleteRequest, clearAll, importData, handleOpenFile, saveToFile, downloadBackup, closeDatabase, fileHandle }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, updateDelivery, updateRequestItem, deleteRequest, clearAll, importData, handleOpenFile, handleNewFile, saveToFile, downloadBackup, closeDatabase, memorizeFile, fileHandle, storedHandle }}>
       {children}
     </AppContext.Provider>
   );
