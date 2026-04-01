@@ -98,12 +98,12 @@ export function Faltas() {
           <table className="w-full text-sm text-left text-slate-600">
             <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 font-semibold">Pedido</th>
-                <th className="px-6 py-4 font-semibold">Descrição do Fio</th>
-                <th className="px-6 py-4 font-semibold">Destino</th>
-                <th className="px-6 py-4 font-semibold text-right">Solicitado</th>
-                <th className="px-6 py-4 font-semibold text-right">Entregue</th>
-                <th className="px-6 py-4 font-semibold text-right">Em Falta</th>
+                <th className="px-4 py-3 font-semibold">Pedido</th>
+                <th className="px-4 py-3 font-semibold">Descrição do Fio</th>
+                <th className="px-4 py-3 font-semibold">Destino</th>
+                <th className="px-4 py-3 font-semibold text-right">Solicitado</th>
+                <th className="px-4 py-3 font-semibold text-right">Entregue</th>
+                <th className="px-4 py-3 font-semibold text-right">Em Falta</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -116,17 +116,17 @@ export function Faltas() {
               ) : (
                 filteredItems.map((item) => (
                   <tr key={item.id} className="bg-white hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">{item.requestNumber}</div>
                       <div className="text-xs text-slate-500">{item.requestDate}</div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">{item.description}</div>
                       {item.coneColor && (
                         <div className="text-xs text-slate-500 mt-1">Cor: {item.coneColor}</div>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         item.section.toLowerCase().includes('tecelagem') ? 'bg-indigo-100 text-indigo-800' :
                         item.section.toLowerCase().includes('tinturaria') ? 'bg-fuchsia-100 text-fuchsia-800' :
@@ -135,13 +135,13 @@ export function Faltas() {
                         {item.section}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-700">
+                    <td className="px-4 py-3 text-right font-medium text-slate-700">
                       {Number(item.quantity).toLocaleString('pt-PT')} {item.unit || 'Kg'}
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-emerald-600">
+                    <td className="px-4 py-3 text-right font-medium text-emerald-600">
                       {item.delivered.toLocaleString('pt-PT')} {item.unit || 'Kg'}
                     </td>
-                    <td className="px-6 py-4 text-right font-bold text-amber-600">
+                    <td className="px-4 py-3 text-right font-bold text-amber-600">
                       {item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'}
                     </td>
                   </tr>

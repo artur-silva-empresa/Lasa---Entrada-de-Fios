@@ -120,22 +120,22 @@ export function Stock() {
             <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
               <tr>
                 <th className="font-semibold border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 resize-x overflow-auto min-w-[300px] w-[600px]">Descrição do Fio</div>
+                  <div className="px-4 py-3 resize-x overflow-auto min-w-[250px] w-[350px]">Descrição do Fio</div>
                 </th>
                 <th className="font-semibold border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 resize-x overflow-auto min-w-[120px]">Destino</div>
+                  <div className="px-4 py-3 resize-x overflow-auto min-w-[100px]">Destino</div>
                 </th>
                 <th className="font-semibold text-right border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 resize-x overflow-auto min-w-[120px]">Solicitado</div>
+                  <div className="px-4 py-3 resize-x overflow-auto min-w-[100px]">Solicitado</div>
                 </th>
                 <th className="font-semibold text-right border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 resize-x overflow-auto min-w-[120px]">Entregue</div>
+                  <div className="px-4 py-3 resize-x overflow-auto min-w-[100px]">Entregue</div>
                 </th>
                 <th className="font-semibold text-right border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 resize-x overflow-auto min-w-[120px]">Em Falta</div>
+                  <div className="px-4 py-3 resize-x overflow-auto min-w-[100px]">Em Falta</div>
                 </th>
                 <th className="font-semibold text-center border-r border-slate-200 p-0 w-0">
-                  <div className="px-6 py-4 min-w-[120px]">Estado</div>
+                  <div className="px-4 py-3 min-w-[100px]">Estado</div>
                 </th>
                 <th className="p-0 w-full"></th>
               </tr>
@@ -156,7 +156,7 @@ export function Stock() {
                         className="bg-white hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => toggleRow(item.id)}
                       >
-                        <td className="px-6 py-4 font-medium text-slate-900 break-words whitespace-normal min-w-[300px]" title={item.description}>
+                        <td className="px-4 py-3 font-medium text-slate-900 break-words whitespace-normal min-w-[300px]" title={item.description}>
                           <div className="flex items-start gap-2">
                             <div className="mt-1">
                               {isExpanded ? (
@@ -168,7 +168,7 @@ export function Stock() {
                             <span>{item.description}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             item.section === 'Tecelagem' ? 'bg-indigo-100 text-indigo-800' :
                             item.section === 'Tinturaria' ? 'bg-fuchsia-100 text-fuchsia-800' :
@@ -177,16 +177,16 @@ export function Stock() {
                             {item.section}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right font-medium text-slate-700">
+                        <td className="px-4 py-3 text-right font-medium text-slate-700">
                           {item.requested.toLocaleString('pt-PT')} {item.unit}
                         </td>
-                        <td className="px-6 py-4 text-right font-medium text-emerald-600">
+                        <td className="px-4 py-3 text-right font-medium text-emerald-600">
                           {item.delivered.toLocaleString('pt-PT')} {item.unit}
                         </td>
-                        <td className="px-6 py-4 text-right font-bold text-amber-600">
+                        <td className="px-4 py-3 text-right font-bold text-amber-600">
                           {item.pending > 0 ? item.pending.toLocaleString('pt-PT') : '0'} {item.pending > 0 ? item.unit : ''}
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-3 text-center">
                           {item.pending <= 0 ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
                               Completo
@@ -205,15 +205,15 @@ export function Stock() {
                       </tr>
                       {isExpanded && item.items.map((subItem, idx) => (
                         <tr key={`${item.id}-sub-${idx}`} className="bg-slate-50/80 border-t-0">
-                          <td className="px-6 py-3 pl-12 text-sm text-slate-600">
+                          <td className="px-4 py-2 pl-12 text-sm text-slate-600">
                             Pedido {subItem.requestNumber}
                             {subItem.coneColor && <span className="ml-2 text-xs text-slate-400">(Cor: {subItem.coneColor})</span>}
                           </td>
-                          <td className="px-6 py-3 text-sm text-slate-500">{subItem.section}</td>
-                          <td className="px-6 py-3 text-right text-sm text-slate-600">{Number(subItem.quantity).toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
-                          <td className="px-6 py-3 text-right text-sm text-emerald-600">{subItem.delivered.toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
-                          <td className="px-6 py-3 text-right text-sm font-medium text-amber-600">{subItem.pending > 0 ? subItem.pending.toLocaleString('pt-PT') : '0'} {subItem.pending > 0 ? (subItem.unit || 'Kg') : ''}</td>
-                          <td className="px-6 py-3 text-center">
+                          <td className="px-4 py-2 text-sm text-slate-500">{subItem.section}</td>
+                          <td className="px-4 py-2 text-right text-sm text-slate-600">{Number(subItem.quantity).toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
+                          <td className="px-4 py-2 text-right text-sm text-emerald-600">{subItem.delivered.toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
+                          <td className="px-4 py-2 text-right text-sm font-medium text-amber-600">{subItem.pending > 0 ? subItem.pending.toLocaleString('pt-PT') : '0'} {subItem.pending > 0 ? (subItem.unit || 'Kg') : ''}</td>
+                          <td className="px-4 py-2 text-center">
                             {subItem.pending <= 0 ? (
                               <span className="text-xs text-emerald-600 font-medium">Completo</span>
                             ) : subItem.delivered > 0 ? (
