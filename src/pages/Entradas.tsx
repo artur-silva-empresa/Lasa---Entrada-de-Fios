@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { PackageCheck, Plus, Check, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { PackageCheck, Plus, Check, Search, ChevronDown, ChevronRight, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function Entradas() {
-  const { state, addDelivery } = useAppStore();
+  const { state, addDelivery, updateDelivery } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSection, setFilterSection] = useState<'all' | 'Tinturaria' | 'Tecelagem' | 'Urdir'>('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [deliveryQuantity, setDeliveryQuantity] = useState<string>('');
   const [deliveryNote, setDeliveryNote] = useState<string>('');
@@ -16,6 +17,12 @@ export function Entradas() {
   const [showOverDeliveryModal, setShowOverDeliveryModal] = useState(false);
   const [pendingDelivery, setPendingDelivery] = useState<{ id: string, qty: number, note: string, date: string, observations: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [selectedDeliveryForEdit, setSelectedDeliveryForEdit] = useState<any>(null);
+  const [editDeliveryQuantity, setEditDeliveryQuantity] = useState('');
+  const [editDeliveryDate, setEditDeliveryDate] = useState('');
+  const [editDeliveryNote, setEditDeliveryNote] = useState('');
+  const [editDeliveryObservations, setEditDeliveryObservations] = useState('');
 
   const pendingItems = state.items.filter(item => {
     const delivered = state.deliveries.filter(d => d.itemId === item.id).reduce((sum, d) => sum + Number(d.quantity || 0), 0);
@@ -60,6 +67,15 @@ export function Entradas() {
 
   const toggleGroup = (key: string) => {
     setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleItem = (key: string) => {
+    setExpandedItems(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -183,36 +199,104 @@ export function Entradas() {
                           const isSelected = selectedItemId === item.id;
 
                           return (
-                            <div 
-                              key={item.id} 
-                              className={cn(
-                                "p-4 hover:bg-slate-100 transition-colors cursor-pointer border-l-4",
-                                isSelected ? "border-emerald-500 bg-emerald-100/50" : "border-transparent"
-                              )}
-                              onClick={() => {
-                                setSelectedItemId(item.id);
-                                setDeliveryQuantity(item.pending.toString());
-                              }}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                    Pedido {request?.number}
-                                  </span>
-                                  {item.coneColor && (
-                                    <div className="text-xs text-slate-600 mt-1">
-                                      Cor: <strong className="text-slate-800">{item.coneColor}</strong>
-                                    </div>
+                            <div key={item.id} className="flex flex-col">
+                              <div 
+                                className={cn(
+                                  "p-4 hover:bg-slate-100 transition-colors cursor-pointer border-l-4",
+                                  isSelected ? "border-emerald-500 bg-emerald-100/50" : "border-transparent"
+                                )}
+                                onClick={() => {
+                                  setSelectedItemId(item.id);
+                                  setDeliveryQuantity(item.pending.toString());
+                                }}
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                      Pedido {request?.number}
+                                    </span>
+                                    {item.coneColor && (
+                                      <div className="text-xs text-slate-600 mt-1">
+                                        Cor: <strong className="text-slate-800">{item.coneColor}</strong>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-right ml-4">
+                                    <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'} em falta</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                                    <span>Solicitado: <strong className="text-slate-700">{Number(item.quantity).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
+                                    <span>Entregue: <strong className="text-emerald-600">{Number(item.delivered).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
+                                  </div>
+                                  {item.delivered > 0 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleItem(item.id);
+                                      }}
+                                      className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      {expandedItems.has(item.id) ? (
+                                        <>Ocultar Entregas <ChevronUp className="w-3 h-3" /></>
+                                      ) : (
+                                        <>Ver Entregas <ChevronDown className="w-3 h-3" /></>
+                                      )}
+                                    </button>
                                   )}
                                 </div>
-                                <div className="text-right ml-4">
-                                  <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'} em falta</div>
+                              </div>
+                              
+                              {expandedItems.has(item.id) && item.delivered > 0 && (
+                                <div className="bg-slate-50/80 p-4 border-l-4 border-transparent">
+                                  <div className="pl-4 border-l-2 border-slate-200">
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase mb-3">Histórico de Entregas</h4>
+                                    <div className="space-y-2">
+                                      {state.deliveries
+                                        .filter(d => d.itemId === item.id)
+                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                        .map((delivery) => (
+                                          <div key={delivery.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                                            <div className="flex items-center gap-2 min-w-[140px]">
+                                              <span className="font-bold text-emerald-600">{delivery.quantity} {item.unit || 'Kg'} entregues</span>
+                                              <span className="text-slate-400 text-xs">•</span>
+                                              <span className="text-slate-600">
+                                                {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString('pt-PT') : new Date(delivery.date).toLocaleDateString('pt-PT')}
+                                              </span>
+                                            </div>
+                                            {delivery.deliveryNote && (
+                                              <div className="text-slate-600 flex items-center gap-1">
+                                                <span className="font-medium text-slate-500">Guia:</span> {delivery.deliveryNote}
+                                              </div>
+                                            )}
+                                            {delivery.observations && (
+                                              <div className="text-slate-600 flex items-center gap-1">
+                                                <span className="font-medium text-slate-500">Obs:</span> {delivery.observations}
+                                              </div>
+                                            )}
+                                            <div className="ml-auto pl-4">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedDeliveryForEdit(delivery);
+                                                  setEditDeliveryQuantity(delivery.quantity.toString());
+                                                  setEditDeliveryDate(delivery.deliveryDate || delivery.date.split('T')[0]);
+                                                  setEditDeliveryNote(delivery.deliveryNote || '');
+                                                  setEditDeliveryObservations(delivery.observations || '');
+                                                }}
+                                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Editar Entrega"
+                                              >
+                                                <Edit2 className="w-4 h-4" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-slate-500">
-                                <span>Solicitado: <strong className="text-slate-700">{Number(item.quantity).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
-                                <span>Entregue: <strong className="text-emerald-600">{Number(item.delivered).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
-                              </div>
+                              )}
                             </div>
                           );
                         })}
@@ -366,6 +450,92 @@ export function Entradas() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedDeliveryForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Editar Entrega</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Quantidade Entregue
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editDeliveryQuantity}
+                  onChange={(e) => setEditDeliveryQuantity(e.target.value)}
+                  className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2.5 border"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data de Entrega
+                </label>
+                <input
+                  type="date"
+                  value={editDeliveryDate}
+                  onChange={(e) => setEditDeliveryDate(e.target.value)}
+                  className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2.5 border"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Guia de Remessa
+                </label>
+                <input
+                  type="text"
+                  value={editDeliveryNote}
+                  onChange={(e) => setEditDeliveryNote(e.target.value)}
+                  className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2.5 border"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Observações
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDeliveryObservations}
+                  onChange={(e) => setEditDeliveryObservations(e.target.value)}
+                  className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2.5 border resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setSelectedDeliveryForEdit(null)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-medium rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedDeliveryForEdit && editDeliveryQuantity) {
+                    updateDelivery(selectedDeliveryForEdit.id, {
+                      quantity: Number(editDeliveryQuantity),
+                      deliveryDate: editDeliveryDate,
+                      deliveryNote: editDeliveryNote,
+                      observations: editDeliveryObservations
+                    });
+                    setSelectedDeliveryForEdit(null);
+                  }
+                }}
+                disabled={!editDeliveryQuantity || Number(editDeliveryQuantity) < 0}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar
               </button>
             </div>
           </div>

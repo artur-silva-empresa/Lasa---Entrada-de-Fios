@@ -153,19 +153,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const downloadBackup = async () => {
     try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: 'LasaBD.json',
-        types: [{
-          description: 'Ficheiro de Base de Dados JSON',
-          accept: { 'application/json': ['.json'] },
-        }],
-      });
-      
-      const writable = await handle.createWritable();
-      await writable.write(JSON.stringify(state, null, 2));
-      await writable.close();
-      
-      alert('Backup transferido com sucesso!');
+      if ('showSaveFilePicker' in window) {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: 'LasaBD',
+          types: [{
+            description: 'Ficheiro de Base de Dados JSON',
+            accept: { 'application/json': ['.json'] },
+          }],
+        });
+        
+        const writable = await handle.createWritable();
+        await writable.write(JSON.stringify(state, null, 2));
+        await writable.close();
+        
+        alert('Backup transferido com sucesso!');
+      } else {
+        // Fallback for browsers that don't support showSaveFilePicker
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'LasaBD.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('Backup transferido com sucesso!');
+      }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         console.error('Erro ao transferir backup', e);

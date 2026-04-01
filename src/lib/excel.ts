@@ -94,6 +94,28 @@ export const exportToExcel = (requests: Request[], items: RequestItem[], deliver
   XLSX.writeFile(workbook, 'Exportacao_Stock.xlsx');
 };
 
+export const exportDeliveriesToExcel = (data: any[], filename: string) => {
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  
+  // Set column widths
+  const wscols = [
+    { wch: 15 }, // Data de Entrega
+    { wch: 15 }, // Pedido
+    { wch: 40 }, // Fio
+    { wch: 15 }, // Secção
+    { wch: 15 }, // Quantidade
+    { wch: 10 }, // Unidade
+    { wch: 20 }, // Guia de Remessa
+    { wch: 40 }  // Observações
+  ];
+  worksheet['!cols'] = wscols;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Entregas');
+  
+  XLSX.writeFile(workbook, `${filename}.xlsx`);
+};
+
 export const parseExcel = async (file: File): Promise<ParsedRequest> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

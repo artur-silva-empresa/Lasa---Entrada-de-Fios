@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Pedidos } from './pages/Pedidos';
 import { Entradas } from './pages/Entradas';
+import { Entregas } from './pages/Entregas';
 import { Stock } from './pages/Stock';
 import { Faltas } from './pages/Faltas';
 import { Settings } from './pages/Settings';
@@ -19,6 +20,8 @@ export default function App() {
         return <Pedidos />;
       case 'entradas':
         return <Entradas />;
+      case 'entregas':
+        return <Entregas />;
       case 'stock':
         return <Stock />;
       case 'faltas':

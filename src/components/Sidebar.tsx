@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, AlertTriangle, Settings, Save, Download, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, PackageCheck, Package, BarChart3, AlertTriangle, Settings, Save, Download, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppStore } from '../store';
 
@@ -14,6 +14,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos de Fio', icon: FileSpreadsheet },
     { id: 'entradas', label: 'Entradas (Receção)', icon: PackageCheck },
+    { id: 'entregas', label: 'Histórico de Entregas', icon: Package },
     { id: 'stock', label: 'Stock / Faltas', icon: BarChart3 },
     { id: 'faltas', label: 'Relatório de Faltas', icon: AlertTriangle },
   ];

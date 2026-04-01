@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store';
 import { parseExcel, exportToExcel } from '../lib/excel';
-import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus, Download, Edit2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus, Download, Pencil } from 'lucide-react';
 
 export function Pedidos() {
   const { state, addRequest, deleteRequest, addDelivery, updateDelivery } = useAppStore();
@@ -19,7 +19,7 @@ export function Pedidos() {
   const [deliveryNote, setDeliveryNote] = useState('');
   const [deliveryObservations, setDeliveryObservations] = useState('');
 
-  const [selectedDeliveryForEdit, setSelectedDeliveryForEdit] = useState<any>(null);
+  const [editingDelivery, setEditingDelivery] = useState<any>(null);
   const [editDeliveryQuantity, setEditDeliveryQuantity] = useState('');
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editDeliveryNote, setEditDeliveryNote] = useState('');
@@ -298,19 +298,17 @@ export function Pedidos() {
                                     <td className="px-4 py-3 font-medium text-emerald-600">{delivered.toLocaleString('pt-PT')}</td>
                                     <td className="px-4 py-3 text-slate-500 italic">{item.observations || '-'}</td>
                                     <td className="px-4 py-3 text-right">
-                                      <div className="flex items-center justify-end gap-1">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedItemForDelivery(item);
-                                            setDeliveryQuantity(Math.max(0, Number(item.quantity) - delivered).toString());
-                                          }}
-                                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                          title="Registar Entrega"
-                                        >
-                                          <PackagePlus className="w-5 h-5" />
-                                        </button>
-                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedItemForDelivery(item);
+                                          setDeliveryQuantity(Math.max(0, Number(item.quantity) - delivered).toString());
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                        title="Registar Entrega"
+                                      >
+                                        <PackagePlus className="w-5 h-5" />
+                                      </button>
                                     </td>
                                   </tr>
                                   {isItemExpanded && hasDeliveries && (
@@ -320,40 +318,40 @@ export function Pedidos() {
                                           <h4 className="text-xs font-semibold text-slate-500 uppercase mb-3">Histórico de Entregas</h4>
                                           <div className="space-y-3">
                                             {sortedDeliveries.map((delivery) => (
-                                              <div key={delivery.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                                                <div className="flex items-center gap-2 min-w-[140px]">
-                                                  <span className="font-bold text-emerald-600">{delivery.quantity} {item.unit || 'Kg'} entregues</span>
-                                                  <span className="text-slate-400 text-xs">•</span>
-                                                  <span className="text-slate-600">
-                                                    {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString('pt-PT') : new Date(delivery.date).toLocaleDateString('pt-PT')}
-                                                  </span>
-                                                </div>
-                                                {delivery.deliveryNote && (
-                                                  <div className="text-slate-600 flex items-center gap-1">
-                                                    <span className="font-medium text-slate-500">Guia:</span> {delivery.deliveryNote}
+                                              <div key={delivery.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm group">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-1">
+                                                  <div className="flex items-center gap-2 min-w-[140px]">
+                                                    <span className="font-bold text-emerald-600">{delivery.quantity} {item.unit || 'Kg'} entregues</span>
+                                                    <span className="text-slate-400 text-xs">•</span>
+                                                    <span className="text-slate-600">
+                                                      {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString('pt-PT') : new Date(delivery.date).toLocaleDateString('pt-PT')}
+                                                    </span>
                                                   </div>
-                                                )}
-                                                {delivery.observations && (
-                                                  <div className="text-slate-600 flex items-center gap-1">
-                                                    <span className="font-medium text-slate-500">Obs:</span> {delivery.observations}
-                                                  </div>
-                                                )}
-                                                <div className="ml-auto pl-4">
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      setSelectedDeliveryForEdit(delivery);
-                                                      setEditDeliveryQuantity(delivery.quantity.toString());
-                                                      setEditDeliveryDate(delivery.deliveryDate || delivery.date.split('T')[0]);
-                                                      setEditDeliveryNote(delivery.deliveryNote || '');
-                                                      setEditDeliveryObservations(delivery.observations || '');
-                                                    }}
-                                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Editar Entrega"
-                                                  >
-                                                    <Edit2 className="w-4 h-4" />
-                                                  </button>
+                                                  {delivery.deliveryNote && (
+                                                    <div className="text-slate-600 flex items-center gap-1">
+                                                      <span className="font-medium text-slate-500">Guia:</span> {delivery.deliveryNote}
+                                                    </div>
+                                                  )}
+                                                  {delivery.observations && (
+                                                    <div className="text-slate-600 flex items-center gap-1">
+                                                      <span className="font-medium text-slate-500">Obs:</span> {delivery.observations}
+                                                    </div>
+                                                  )}
                                                 </div>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingDelivery({ ...delivery, itemDescription: item.description, itemSection: item.section, itemUnit: item.unit });
+                                                    setEditDeliveryQuantity(delivery.quantity.toString());
+                                                    setEditDeliveryDate(delivery.deliveryDate ? delivery.deliveryDate.split('T')[0] : delivery.date.split('T')[0]);
+                                                    setEditDeliveryNote(delivery.deliveryNote || '');
+                                                    setEditDeliveryObservations(delivery.observations || '');
+                                                  }}
+                                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                  title="Editar Entrega"
+                                                >
+                                                  <Pencil className="w-4 h-4" />
+                                                </button>
                                               </div>
                                             ))}
                                           </div>
@@ -497,20 +495,27 @@ export function Pedidos() {
         </div>
       )}
 
-      {selectedDeliveryForEdit && (
+      {editingDelivery && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Editar Entrega</h3>
             
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <p className="text-sm font-medium text-slate-900">{editingDelivery.itemDescription}</p>
+              <p className="text-xs text-slate-500 mt-1">Secção: {editingDelivery.itemSection}</p>
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quantidade Entregue</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Quantidade Entregue ({editingDelivery.itemUnit || 'Kg'})
+                </label>
                 <input
                   type="number"
                   value={editDeliveryQuantity}
                   onChange={(e) => setEditDeliveryQuantity(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="0"
+                  min="1"
                 />
               </div>
               
@@ -531,6 +536,7 @@ export function Pedidos() {
                   value={editDeliveryNote}
                   onChange={(e) => setEditDeliveryNote(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nº da guia"
                 />
               </div>
 
@@ -541,33 +547,34 @@ export function Pedidos() {
                   onChange={(e) => setEditDeliveryObservations(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   rows={2}
+                  placeholder="Notas adicionais"
                 />
               </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setSelectedDeliveryForEdit(null)}
+                onClick={() => setEditingDelivery(null)}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-medium rounded-lg transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => {
-                  if (selectedDeliveryForEdit && editDeliveryQuantity) {
-                    updateDelivery(selectedDeliveryForEdit.id, {
+                  if (editingDelivery && editDeliveryQuantity) {
+                    updateDelivery(editingDelivery.id, {
                       quantity: Number(editDeliveryQuantity),
                       deliveryDate: editDeliveryDate,
                       deliveryNote: editDeliveryNote,
                       observations: editDeliveryObservations
                     });
-                    setSelectedDeliveryForEdit(null);
+                    setEditingDelivery(null);
                   }
                 }}
-                disabled={!editDeliveryQuantity || Number(editDeliveryQuantity) < 0}
+                disabled={!editDeliveryQuantity || Number(editDeliveryQuantity) <= 0}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Guardar
+                Guardar Alterações
               </button>
             </div>
           </div>
