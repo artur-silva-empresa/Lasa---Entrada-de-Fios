@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { PackageCheck, Plus, Check, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { PackageCheck, Plus, Check, Search, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function Entradas() {
-  const { state, addDelivery } = useAppStore();
+  const { state, addDelivery, updateDelivery } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSection, setFilterSection] = useState<'all' | 'Tinturaria' | 'Tecelagem' | 'Urdir'>('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -17,12 +17,13 @@ export function Entradas() {
   const [pendingDelivery, setPendingDelivery] = useState<{ id: string, qty: number, note: string, date: string, observations: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const pendingItems = state.items.filter(item => {
-    const delivered = state.deliveries.filter(d => d.itemId === item.id).reduce((sum, d) => sum + Number(d.quantity || 0), 0);
-    return delivered < Number(item.quantity || 0);
-  });
+  const [editingDelivery, setEditingDelivery] = useState<any>(null);
+  const [editDeliveryQuantity, setEditDeliveryQuantity] = useState('');
+  const [editDeliveryDate, setEditDeliveryDate] = useState('');
+  const [editDeliveryNote, setEditDeliveryNote] = useState('');
+  const [editDeliveryObservations, setEditDeliveryObservations] = useState('');
 
-  const filteredItems = pendingItems.filter(item => {
+  const filteredItems = state.items.filter(item => {
     const sectionDisplay = item.section.toLowerCase().includes('tecelagem') ? 'Tecelagem' :
                            item.section.toLowerCase().includes('tinturaria') ? 'Tinturaria' : 
                            item.section.toLowerCase().includes('urdir') ? 'Urdir' : 'Outros';
@@ -137,14 +138,14 @@ export function Entradas() {
                 <option value="Urdir">Urdir</option>
               </select>
               <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
-                {pendingItems.length} itens
+                {filteredItems.length} itens
               </span>
             </div>
           </div>
 
           {Object.keys(groupedItems).length === 0 ? (
             <div className="p-12 text-center text-slate-500">
-              {pendingItems.length === 0 
+              {state.items.length === 0
                 ? "Não existem fios em falta no momento." 
                 : "Nenhum fio encontrado com os filtros atuais."}
             </div>
@@ -187,11 +188,12 @@ export function Entradas() {
                               key={item.id} 
                               className={cn(
                                 "p-4 hover:bg-slate-100 transition-colors cursor-pointer border-l-4",
-                                isSelected ? "border-emerald-500 bg-emerald-100/50" : "border-transparent"
+                                isSelected ? "border-emerald-500 bg-emerald-100/50" :
+                                item.pending <= 0 ? "border-slate-200 bg-slate-50 opacity-60" : "border-transparent"
                               )}
                               onClick={() => {
                                 setSelectedItemId(item.id);
-                                setDeliveryQuantity(item.pending.toString());
+                                setDeliveryQuantity(Math.max(0, item.pending).toString());
                               }}
                             >
                               <div className="flex justify-between items-start mb-2">
@@ -206,7 +208,13 @@ export function Entradas() {
                                   )}
                                 </div>
                                 <div className="text-right ml-4">
-                                  <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'} em falta</div>
+                                  {item.pending > 0 ? (
+                                    <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'} em falta</div>
+                                  ) : (
+                                    <div className="text-sm font-bold text-emerald-600 flex items-center gap-1 justify-end">
+                                      <Check className="w-4 h-4" /> Completo
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -335,6 +343,53 @@ export function Entradas() {
                           Confirmar
                         </button>
                       </div>
+
+                      {/* Histórico de Entregas do Item Selecionado */}
+                      {(() => {
+                        const itemDeliveries = state.deliveries.filter(d => d.itemId === selectedItemId);
+                        if (itemDeliveries.length === 0) return null;
+
+                        const sortedDeliveries = [...itemDeliveries].sort((a, b) => {
+                          const dateA = new Date(a.deliveryDate || a.date).getTime();
+                          const dateB = new Date(b.deliveryDate || b.date).getTime();
+                          return dateB - dateA;
+                        });
+
+                        return (
+                          <div className="mt-8 pt-6 border-t border-slate-100">
+                            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">Histórico de Entregas</h3>
+                            <div className="space-y-3">
+                              {sortedDeliveries.map((delivery) => (
+                                <div key={delivery.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <span className="text-sm font-bold text-emerald-600">{delivery.quantity} {item?.unit || 'Kg'}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingDelivery({ ...delivery, itemDescription: item?.description, itemUnit: item?.unit });
+                                        setEditDeliveryQuantity(delivery.quantity.toString());
+                                        setEditDeliveryDate(delivery.deliveryDate ? delivery.deliveryDate.split('T')[0] : delivery.date.split('T')[0]);
+                                        setEditDeliveryNote(delivery.deliveryNote || '');
+                                        setEditDeliveryObservations(delivery.observations || '');
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString('pt-PT') : new Date(delivery.date).toLocaleDateString('pt-PT')}
+                                    {delivery.deliveryNote && ` • Guia: ${delivery.deliveryNote}`}
+                                  </div>
+                                  {delivery.observations && (
+                                    <p className="text-xs text-slate-400 mt-1 italic line-clamp-1">{delivery.observations}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   );
                 })()}
@@ -343,6 +398,92 @@ export function Entradas() {
           </div>
         </div>
       </div>
+
+      {editingDelivery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Editar Entrega</h3>
+
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <p className="text-sm font-medium text-slate-900">{editingDelivery.itemDescription}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Quantidade Entregue ({editingDelivery.itemUnit || 'Kg'})
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editDeliveryQuantity}
+                  onChange={(e) => setEditDeliveryQuantity(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  min="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Data de Entrega</label>
+                <input
+                  type="date"
+                  value={editDeliveryDate}
+                  onChange={(e) => setEditDeliveryDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Guia de Remessa</label>
+                <input
+                  type="text"
+                  value={editDeliveryNote}
+                  onChange={(e) => setEditDeliveryNote(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nº da guia"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Observações</label>
+                <textarea
+                  value={editDeliveryObservations}
+                  onChange={(e) => setEditDeliveryObservations(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows={2}
+                  placeholder="Notas adicionais"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setEditingDelivery(null)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-medium rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (editingDelivery && editDeliveryQuantity) {
+                    updateDelivery(editingDelivery.id, {
+                      quantity: Number(editDeliveryQuantity),
+                      deliveryDate: editDeliveryDate,
+                      deliveryNote: editDeliveryNote,
+                      observations: editDeliveryObservations
+                    });
+                    setEditingDelivery(null);
+                  }
+                }}
+                disabled={!editDeliveryQuantity || Number(editDeliveryQuantity) <= 0}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Guardar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showOverDeliveryModal && pendingDelivery && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">

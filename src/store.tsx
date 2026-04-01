@@ -163,7 +163,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Release the file handle and clear state
     setFileHandle(null);
     setState({ requests: [], items: [], deliveries: [] });
+
+    // Attempt to close the window
     window.close();
+
+    // Fallback if window.close() is blocked by the browser
+    setTimeout(() => {
+      alert('A base de dados foi fechada. Pode agora fechar esta aba do browser manualmente.');
+    }, 300);
   };
 
   const handleOpenFile = async () => {
