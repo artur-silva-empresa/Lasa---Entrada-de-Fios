@@ -80,6 +80,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const verifyAndRequestPermission = async (handle: any) => {
     try {
+      if (!handle || typeof handle.queryPermission !== 'function') return false;
       const options = { mode: 'readwrite' };
       if ((await handle.queryPermission(options)) === 'granted') {
         return true;
@@ -110,6 +111,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Set a new timeout to save after 1.5 seconds of inactivity
       saveTimeoutRef.current = setTimeout(async () => {
         try {
+          if (!fileHandle || typeof fileHandle.queryPermission !== 'function') return;
           const hasPermission = await fileHandle.queryPermission({ mode: 'readwrite' });
           if (hasPermission === 'granted') {
             const writable = await fileHandle.createWritable();
@@ -135,6 +137,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       alert('Nenhum ficheiro aberto. Use a opção de transferir backup.');
       return;
     }
+    
+    if ((fileHandle as any).isFallback) {
+      downloadBackup();
+      return;
+    }
+
     try {
       const hasPermission = await verifyAndRequestPermission(fileHandle);
       if (!hasPermission) {
@@ -151,34 +159,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fallbackDownload = (data: any) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'LasaBD.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('Backup transferido com sucesso (pasta de transferências do navegador)!');
+  };
+
   const downloadBackup = async () => {
     try {
       if ('showSaveFilePicker' in window) {
-        const handle = await (window as any).showSaveFilePicker({
-          suggestedName: 'LasaBD',
-          types: [{
-            description: 'Ficheiro de Base de Dados JSON',
-            accept: { 'application/json': ['.json'] },
-          }],
-        });
-        
-        const writable = await handle.createWritable();
-        await writable.write(JSON.stringify(state, null, 2));
-        await writable.close();
-        
-        alert('Backup transferido com sucesso!');
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            id: 'lasa_stocks_dir',
+            suggestedName: 'LasaBD.json',
+            types: [{
+              description: 'Ficheiro de Base de Dados JSON',
+              accept: { 'application/json': ['.json'] },
+            }],
+          });
+          
+          const writable = await handle.createWritable();
+          await writable.write(JSON.stringify(state, null, 2));
+          await writable.close();
+          
+          alert('Backup guardado com sucesso!');
+        } catch (err: any) {
+          if (err.name === 'AbortError') return;
+          console.warn('API bloqueada, a usar transferência tradicional', err);
+          fallbackDownload(state);
+        }
       } else {
-        // Fallback for browsers that don't support showSaveFilePicker
-        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'LasaBD.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert('Backup transferido com sucesso!');
+        fallbackDownload(state);
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
@@ -208,7 +226,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const memorizeFile = async () => {
     try {
+      if (!('showOpenFilePicker' in window)) {
+        return { success: false, message: 'O seu browser não suporta acesso direto a ficheiros para memorização.' };
+      }
+
       const [handle] = await (window as any).showOpenFilePicker({
+        id: 'lasa_stocks_dir',
         types: [{
           description: 'Ficheiro de Base de Dados JSON',
           accept: { 'application/json': ['.json'] },
@@ -222,8 +245,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (idbError) {
         return { success: false, message: 'O seu browser está a bloquear a memorização de ficheiros (IndexedDB desativado para ficheiros locais). Terá de abrir o ficheiro manualmente sempre que iniciar a aplicação.' };
       }
-    } catch (e) {
-      return { success: false, message: 'Operação cancelada.' };
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        return { success: false, message: 'Operação cancelada.' };
+      }
+      return { success: false, message: 'O acesso direto a ficheiros está bloqueado neste ambiente (possivelmente devido a estar num iFrame ou falta de permissões). A memorização automática não funcionará.' };
     }
   };
 
@@ -256,23 +282,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fallbackOpenFile = (): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) resolve(file);
+        else reject(new Error('Nenhum ficheiro selecionado'));
+      };
+      input.oncancel = () => reject(new Error('Cancelado pelo utilizador'));
+      input.click();
+    });
+  };
+
   const handleOpenFile = async () => {
     try {
-      const [handle] = await (window as any).showOpenFilePicker({
-        types: [{
-          description: 'Ficheiro de Base de Dados JSON',
-          accept: { 'application/json': ['.json'] },
-        }],
-      });
+      let handle: any = null;
+      let contents = '';
+      let isFallback = false;
 
-      // Request write permission immediately so auto-save works
-      const hasPermission = await verifyAndRequestPermission(handle);
-      if (!hasPermission) {
-        alert('Aviso: Como não deu permissão de escrita, as alterações não serão guardadas automaticamente no ficheiro. Terá de usar o botão "Transferir Backup".');
+      try {
+        if ('showOpenFilePicker' in window) {
+          [handle] = await (window as any).showOpenFilePicker({
+            id: 'lasa_stocks_dir',
+            types: [{
+              description: 'Ficheiro de Base de Dados JSON',
+              accept: { 'application/json': ['.json'] },
+            }],
+          });
+
+          // Request write permission immediately so auto-save works
+          const hasPermission = await verifyAndRequestPermission(handle);
+          if (!hasPermission) {
+            alert('Aviso: Como não deu permissão de escrita, as alterações não serão guardadas automaticamente no ficheiro. Terá de usar o botão "Transferir Backup".');
+          }
+
+          const file = await handle.getFile();
+          contents = await file.text();
+        } else {
+          throw new Error('Not supported');
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
+        
+        console.warn('File System Access API failed or blocked, falling back...', err);
+        const file = await fallbackOpenFile();
+        contents = await file.text();
+        handle = { isFallback: true, name: file.name };
+        isFallback = true;
+        alert('Aviso: O seu navegador está a bloquear o acesso direto a ficheiros, o que impede a gravação automática. Use a opção "Transferir Backup" sempre que fizer alterações!');
       }
-
-      const file = await handle.getFile();
-      const contents = await file.text();
       
       let parsed = { requests: [], items: [], deliveries: [] };
       if (contents.trim()) {
@@ -290,15 +351,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deliveries: Array.isArray(parsed.deliveries) ? parsed.deliveries : []
       });
       setFileHandle(handle);
-      setStoredHandle(handle);
-      
-      try {
-        await set('lasa_db_handle', handle);
-      } catch (idbError) {
-        console.warn('IndexedDB bloqueado, não será possível memorizar o ficheiro', idbError);
+
+      if (!isFallback) {
+        setStoredHandle(handle);
+        try {
+          await set('lasa_db_handle', handle);
+        } catch (idbError) {
+          console.warn('IndexedDB bloqueado, não será possível memorizar o ficheiro', idbError);
+        }
       }
     } catch (e: any) {
-      if (e.name !== 'AbortError') {
+      if (e.name !== 'AbortError' && e.message !== 'Cancelado pelo utilizador') {
         console.error('Erro ao abrir ficheiro', e);
         alert('Erro ao abrir ficheiro: ' + e.message);
       }
@@ -307,27 +370,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const handleNewFile = async () => {
     try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: 'base_de_dados_lasa.json',
-        types: [{
-          description: 'Ficheiro de Base de Dados JSON',
-          accept: { 'application/json': ['.json'] },
-        }],
-      });
-      
+      let handle: any = null;
+      let isFallback = false;
       const initialState = { requests: [], items: [], deliveries: [] };
-      const writable = await handle.createWritable();
-      await writable.write(JSON.stringify(initialState, null, 2));
-      await writable.close();
+
+      try {
+        if ('showSaveFilePicker' in window) {
+          handle = await (window as any).showSaveFilePicker({
+            id: 'lasa_stocks_dir',
+            suggestedName: 'base_de_dados_lasa.json',
+            types: [{
+              description: 'Ficheiro de Base de Dados JSON',
+              accept: { 'application/json': ['.json'] },
+            }],
+          });
+          
+          const writable = await handle.createWritable();
+          await writable.write(JSON.stringify(initialState, null, 2));
+          await writable.close();
+        } else {
+          throw new Error('Not supported');
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
+        
+        console.warn('File System Access API failed or blocked, falling back to memory...', err);
+        handle = { isFallback: true, name: 'base_de_dados_lasa.json' };
+        isFallback = true;
+        alert('Aviso: O seu navegador não suporta criação direta de ficheiros. A base de dados foi criada na memória. Por favor, transfira o backup no fim!');
+      }
       
       setState(initialState);
       setFileHandle(handle);
-      setStoredHandle(handle);
       
-      try {
-        await set('lasa_db_handle', handle);
-      } catch (idbError) {
-        console.warn('IndexedDB bloqueado', idbError);
+      if (!isFallback) {
+        setStoredHandle(handle);
+        try {
+          await set('lasa_db_handle', handle);
+        } catch (idbError) {
+          console.warn('IndexedDB bloqueado', idbError);
+        }
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {

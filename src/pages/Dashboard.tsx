@@ -3,6 +3,37 @@ import { useAppStore } from '../store';
 import { Package, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+const splitText = (text: string, maxLength: number) => {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  words.forEach(word => {
+    if ((currentLine + word).length > maxLength) {
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      currentLine = word + ' ';
+    } else {
+      currentLine += word + ' ';
+    }
+  });
+  if (currentLine.trim()) lines.push(currentLine.trim());
+  return lines.slice(0, 4);
+};
+
+const CustomXAxisTick = ({ x, y, payload }: any) => {
+  const lines = splitText(payload.value, 18);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={24} textAnchor="middle" fill="#0f172a" fontSize={11} fontWeight="bold">
+        {lines.map((line, index) => (
+          <tspan x={0} dy={index === 0 ? 0 : 14} key={index}>
+            {line}{index === 3 && payload.value.length > 72 ? '...' : ''}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+};
+
 export function Dashboard() {
   const { state } = useAppStore();
 
@@ -26,6 +57,8 @@ export function Dashboard() {
     totalsByUnit[unit].pending = Math.max(0, totalsByUnit[unit].requested - totalsByUnit[unit].delivered);
   });
 
+  const availableUnits = Object.keys(totalsByUnit);
+
   const pendingItemsCount = state.items.filter(item => {
     const delivered = state.deliveries.filter(d => d.itemId === item.id).reduce((sum, d) => sum + Number(d.quantity || 0), 0);
     return delivered < Number(item.quantity || 0);
@@ -47,38 +80,52 @@ export function Dashboard() {
     );
   };
 
-  // Prepare data for the bar chart
-  const chartDataMap = new Map<string, any>();
+  // Prepare data for the bar charts
+  const chartDataByUnit = new Map<string, any[]>();
   
-  state.items.forEach(item => {
-    const key = `${item.description} (${item.unit || 'Kg'})`;
-    if (!chartDataMap.has(key)) {
-      chartDataMap.set(key, {
-        name: item.description,
-        unit: item.unit || 'Kg',
-        'Quantidade Pedida': 0,
-        'Quantidade em Falta': 0,
-        delivered: 0
-      });
-    }
-    const data = chartDataMap.get(key);
-    data['Quantidade Pedida'] += Number(item.quantity || 0);
-  });
+  availableUnits.forEach(unit => {
+    const chartDataMap = new Map<string, any>();
+    
+    state.items.forEach(item => {
+      const itemUnit = item.unit || 'Kg';
+      if (itemUnit !== unit) return;
 
-  state.deliveries.forEach(d => {
-    const item = state.items.find(i => i.id === d.itemId);
-    if (item) {
-      const key = `${item.description} (${item.unit || 'Kg'})`;
-      if (chartDataMap.has(key)) {
-        chartDataMap.get(key).delivered += Number(d.quantity || 0);
+      const key = item.description;
+      if (!chartDataMap.has(key)) {
+        chartDataMap.set(key, {
+          name: item.description,
+          unit: unit,
+          'Quantidade Pedida': 0,
+          'Quantidade Entregue': 0,
+          'Quantidade em Falta': 0,
+        });
       }
+      const data = chartDataMap.get(key);
+      data['Quantidade Pedida'] += Number(item.quantity || 0);
+    });
+
+    state.deliveries.forEach(d => {
+      const item = state.items.find(i => i.id === d.itemId);
+      if (item) {
+        const itemUnit = item.unit || 'Kg';
+        if (itemUnit !== unit) return;
+
+        const key = item.description;
+        if (chartDataMap.has(key)) {
+          chartDataMap.get(key)['Quantidade Entregue'] += Number(d.quantity || 0);
+        }
+      }
+    });
+
+    const chartData = Array.from(chartDataMap.values()).map(data => {
+      data['Quantidade em Falta'] = Math.max(0, data['Quantidade Pedida'] - data['Quantidade Entregue']);
+      return data;
+    }).sort((a, b) => b['Quantidade Pedida'] - a['Quantidade Pedida']).slice(0, 15);
+
+    if (chartData.length > 0) {
+      chartDataByUnit.set(unit, chartData);
     }
   });
-
-  const chartData = Array.from(chartDataMap.values()).map(data => {
-    data['Quantidade em Falta'] = Math.max(0, data['Quantidade Pedida'] - data.delivered);
-    return data;
-  }).sort((a, b) => b['Quantidade Pedida'] - a['Quantidade Pedida']).slice(0, 15); // Top 15 to keep chart readable
 
   return (
     <div className="space-y-8">
@@ -118,36 +165,46 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-6">Visão Geral por Fio (Top 15)</h2>
-        {chartData.length === 0 ? (
-          <p className="text-slate-500 text-sm text-center py-8">Nenhum dado disponível para o gráfico.</p>
-        ) : (
-          <div className="h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={-45} 
-                  textAnchor="end" 
-                  height={80} 
-                  interval={0} 
-                  tick={{ fontSize: 11, fill: '#64748b' }} 
-                />
-                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
-                <Tooltip 
-                  formatter={(value: number, name: string, props: any) => [`${value.toLocaleString('pt-PT')} ${props.payload.unit}`, name]}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar dataKey="Quantidade Pedida" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Quantidade em Falta" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+      <div className="space-y-8">
+        {Array.from(chartDataByUnit.entries()).map(([unit, chartData]) => (
+          <div key={unit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-6">Visão Geral por Fio - {unit} (Top 15)</h2>
+            <div className="h-[450px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                  barGap={4}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    interval={0} 
+                    tick={<CustomXAxisTick />}
+                  />
+                  <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
+                  <Tooltip 
+                    formatter={(value: number, name: string, props: any) => [`${value.toLocaleString('pt-PT')} ${props.payload.unit}`, name]}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    align="center" 
+                    wrapperStyle={{ paddingBottom: '20px', fontSize: '12px' }} 
+                  />
+                  <Bar dataKey="Quantidade Pedida" stackId="pedido" fill="#1e3a8a" barSize={16} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Quantidade Entregue" stackId="status" fill="#22c55e" barSize={16} />
+                  <Bar dataKey="Quantidade em Falta" stackId="status" fill="transparent" stroke="#22c55e" strokeWidth={1} strokeDasharray="2 2" barSize={16} radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
+        
+        {chartDataByUnit.size === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-6">Visão Geral por Fio</h2>
+            <p className="text-slate-500 text-sm text-center py-8">Nenhum dado disponível para o gráfico.</p>
           </div>
         )}
       </div>

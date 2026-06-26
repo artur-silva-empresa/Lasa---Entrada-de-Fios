@@ -169,7 +169,8 @@ export const parseExcel = async (file: File): Promise<ParsedRequest> => {
 
           // Detect table start
           if (!inTable) {
-            if (row.some(cell => typeof cell === 'string' && cell.toLowerCase().includes('cor de cone'))) {
+            const rowText = row.map(c => String(c).toLowerCase()).join(' ');
+            if (rowText.includes('cor de cone') || rowText.includes('descrição') || rowText.includes('fio') || rowText.includes('quantidade')) {
               inTable = true;
               continue;
             }
@@ -248,20 +249,18 @@ export const parseExcel = async (file: File): Promise<ParsedRequest> => {
                 continue;
               }
 
-              // Otherwise it's a section header
-              currentSection = col1.trim();
+              // Otherwise it's a section header. Avoid common footer texts.
+              const col1Lower = col1Str.toLowerCase();
+              if (col1Lower.includes('total') || col1Lower.includes('visto') || col1Lower.includes('aprovado')) {
+                continue; 
+              }
+              currentSection = col1Str;
               continue;
             }
           }
         }
 
-        const allowedSections = ['tecelagem', 'tinturaria', 'urdir'];
-        const filteredItems = items.filter(item => {
-          const sectionLower = item.section.toLowerCase();
-          return allowedSections.some(allowed => sectionLower.includes(allowed));
-        });
-
-        resolve({ number: requestNumber || 'N/A', date: requestDate || 'N/A', items: filteredItems });
+        resolve({ number: requestNumber || 'N/A', date: requestDate || 'N/A', items: items });
       } catch (error) {
         reject(error);
       }

@@ -45,6 +45,7 @@ export function Pedidos() {
     setIsUploading(true);
     setUploadError(null);
     try {
+      let totalAdded = 0;
       for (const file of files) {
         const parsed = await parseExcel(file);
         if (parsed.items.length > 0) {
@@ -52,6 +53,9 @@ export function Pedidos() {
             { number: parsed.number, date: parsed.date },
             parsed.items
           );
+          totalAdded++;
+        } else {
+          alert(`Atenção: Nenhum artigo válido encontrado no ficheiro "${file.name}". O ficheiro não tem o formato esperado ou está vazio.`);
         }
       }
     } catch (error) {
@@ -177,7 +181,15 @@ export function Pedidos() {
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
-            {state.requests.map((request) => {
+            {[...state.requests].sort((a, b) => {
+              const dateA = new Date(a.date.replace(/DE:.*/i, '').trim()).getTime();
+              const dateB = new Date(b.date.replace(/DE:.*/i, '').trim()).getTime();
+              
+              const validDateA = isNaN(dateA) ? new Date(a.uploadDate).getTime() : dateA;
+              const validDateB = isNaN(dateB) ? new Date(b.uploadDate).getTime() : dateB;
+              
+              return validDateB - validDateA;
+            }).map((request) => {
               const requestItems = state.items.filter(i => i.requestId === request.id);
               const isExpanded = expandedRequest === request.id;
 
